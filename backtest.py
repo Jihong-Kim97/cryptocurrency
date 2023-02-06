@@ -30,6 +30,7 @@ date_inverted_hammer = {}
 mid_inverted_hammer = {}
 low_inverted_hammer = {}
 volume_inverted_hammer = {}
+price = {}
 flag_hold = False
 flag_activity = False
 target_ticker = ''
@@ -63,6 +64,7 @@ if not os.path.exists(file_directory):
         df_all = pd.concat([df_all, df_ticker])
         pre_volumes[ticker] = 1000000000
         mid_inverted_hammer[ticker] = 0
+        price[ticker] = 0
         low_inverted_hammer[ticker] = 0
         ma7[ticker] = deque(maxlen=20)
     df_all.reset_index(inplace=True)
@@ -80,6 +82,7 @@ else:
         pre_volumes[ticker] = 1000000000
         volume_inverted_hammer[ticker] = 0
         mid_inverted_hammer[ticker] = 0
+        price[ticker] = 0
         low_inverted_hammer[ticker] = 0
         ma7[ticker] = deque(maxlen=7)
 ###################################
@@ -145,7 +148,7 @@ for date in tqdm(dates, desc='backtesting 중...'):
             ##############매수 판단###############                    
             if flag_dip[ticker] == True and close > mid_inverted_hammer[ticker] and low < mid_inverted_hammer[ticker] and progress[ticker] > 1: #and volume_ratio < 5
                 flag_buy[ticker] = 1
-                mid_inverted_hammer[ticker] = close
+                price[ticker] = close
             else:
                 flag_buy[ticker] = 0
             #####################################
@@ -278,13 +281,13 @@ for date in tqdm(dates, desc='backtesting 중...'):
             for candidate in candidates:
                 volume_candidate[candidate] = volume_inverted_hammer[candidate]
             target_ticker = max(volume_candidate, key=volume_candidate.get)
-            purchase_price = mid_inverted_hammer[target_ticker]
+            purchase_price = price[target_ticker]
             flag_hold = True
             purchase_cash = cash
             activity = 'buy'
             transaction_list.append(target_ticker)
             df_all.loc[(df_all['ticker'] == target_ticker) & (df_all['index'] == date), 'activity'] = activity
-            print("buy {} which has {} hammer for {}! at {}".format(target_ticker,inverted_hammer[target_ticker], mid_inverted_hammer[target_ticker], date))
+            print("buy {} which has {} hammer for {}! at {}".format(target_ticker,inverted_hammer[target_ticker], price[target_ticker], date))
 
 
     data = [date, cash, target_ticker, activity, candidates]
