@@ -212,7 +212,7 @@ for date in tqdm(dates, desc='backtesting 중...'):
                     print("deficit sell {}! at {} cash: {}".format(ticker, date, cash))
             ############################################
 
-            ############장기간 보유로 인한 매매############
+            ############장기간 보유로 인한 매매#############
             if hold_progress > 30 and flag_activity == False:
                 print(str(date_inverted_hammer[ticker]) + " ~ " + str(date))
                 cash = purchase_cash * ( 1 + (close - purchase_price) / purchase_price )  
