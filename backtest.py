@@ -164,9 +164,9 @@ for date in tqdm(dates, desc='backtesting 중...'):
         if flag_inverted_hammer[ticker] == True and ticker != target_ticker:  
             ##############매수 판단###############         
             if flag_dip[ticker] == True:           
-                if close > mid_inverted_hammer[ticker] and low < mid_inverted_hammer[ticker] and progress[ticker] > 1 and max_ror < 30 and ror > 0: #and volume_ratio < 5
+                if high > mid_inverted_hammer[ticker] and low < mid_inverted_hammer[ticker] and progress[ticker] > 1 and max_ror < 30 and ror > 0: #and volume_ratio < 5
                     flag_buy[ticker] = 1
-                    price[ticker] = close
+                    price[ticker] = mid_inverted_hammer[ticker]
                 elif high > high_inverted_hammer[ticker]:
                     flag_dip == False
                 else:
@@ -212,8 +212,6 @@ for date in tqdm(dates, desc='backtesting 중...'):
 
         ###########코인 보유시##########
         if target_ticker == ticker and flag_hold and trading_day > 10:
-            if volume_inverted_hammer[ticker] > 1000000000:
-                target_profit = 40
             if dip[ticker] > 20:
                 target_profit = max_target_profit
             else: 
@@ -221,6 +219,8 @@ for date in tqdm(dates, desc='backtesting 중...'):
             ######손절(기준: 허용 손실, 거래량)#########
             if close < purchase_price * (100 - allowable_loss) / 100:
                 if flag_standard:
+                    # if close < purchase_price * (100 - allowable_loss * 3) / 100:
+                    #     volume_inverted_hammer[ticker] -= volume * 3
                     if close < purchase_price * (100 - allowable_loss * 2) / 100:
                         volume_inverted_hammer[ticker] -= volume * 2
                     else:
@@ -237,6 +237,17 @@ for date in tqdm(dates, desc='backtesting 중...'):
                     deficit += 1
             ############################################
 
+            ############세력탈출 판단###############
+            if (max_ror > 20 or (open - low)/open * 100 > 20) and volume > volume_inverted_hammer[ticker]:
+                flag_sell =  True
+                cash = purchase_cash * ( 1 + (close - purchase_price) / purchase_price )
+                acitivity = "escape"
+                if close > purchase_price:
+                    surplus += 1
+                else:
+                    deficit += 1
+            #######################################
+
             # ############장기간 보유로 인한 매매#############
             # if hold_progress > 30 and flag_activity == False:
             #     flag_sell =  True
@@ -250,10 +261,6 @@ for date in tqdm(dates, desc='backtesting 중...'):
 
             if  high > purchase_price * (100 + target_profit) / 100 and flag_activity == False: #돌파
                 flag_rise[ticker] = True
-                # if target_profit > 20:
-                #     high_profits.append([(high - purchase_price)/purchase_price * 100, volume/volume_inverted_hammer[ticker]])
-                # else:
-                #     profits.append([(high - purchase_price)/purchase_price * 100, volume/volume_inverted_hammer[ticker]])
                 profits.append([int((high - purchase_price)/purchase_price * 100), int(dip[ticker]), volume/volume_inverted_hammer[ticker]])
             ###############익절###################
             if flag_rise[ticker] == True and progress[ticker] > 2 and flag_activity == False:
