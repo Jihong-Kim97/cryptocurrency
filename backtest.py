@@ -28,6 +28,7 @@ flag_rise = {}
 flag_buy = {} #중간값 들어온 횟수
 progress = {} #매집봉 발견 이후 경과일
 hold_progress = 0
+hold_progresses = []
 date_inverted_hammer = {}
 mid_inverted_hammer = {}
 low_inverted_hammer = {}
@@ -168,7 +169,7 @@ for date in tqdm(dates, desc='backtesting 중...'):
                     flag_buy[ticker] = 1
                     price[ticker] = mid_inverted_hammer[ticker]
                 elif high > high_inverted_hammer[ticker]:
-                    flag_dip == False
+                    False
                 else:
                     flag_buy[ticker] = 0
             #####################################
@@ -183,6 +184,9 @@ for date in tqdm(dates, desc='backtesting 중...'):
                     volume_inverted_hammer[ticker] -= volume
                     if volume_inverted_hammer[ticker] < 0:
                         flag_escape = True
+
+                if (open - close)/ open * 100  > 25:
+                    flag_escape = True
                 ###################################
 
                 ############세력탈출 판단###############
@@ -214,13 +218,13 @@ for date in tqdm(dates, desc='backtesting 중...'):
         if target_ticker == ticker and flag_hold and trading_day > 10:
             if dip[ticker] > 20:
                 target_profit = max_target_profit
+            # elif hold_progress > 30:
+            #     target_profit = max_target_profit
             else: 
                 target_profit = 20
             ######손절(기준: 허용 손실, 거래량)#########
-            if close < purchase_price * (100 - allowable_loss) / 100:
+            if close < purchase_price * (100 - allowable_loss) / 100 and flag_sell == False:
                 if flag_standard:
-                    # if close < purchase_price * (100 - allowable_loss * 3) / 100:
-                    #     volume_inverted_hammer[ticker] -= volume * 3
                     if close < purchase_price * (100 - allowable_loss * 2) / 100:
                         volume_inverted_hammer[ticker] -= volume * 2
                     else:
@@ -237,17 +241,6 @@ for date in tqdm(dates, desc='backtesting 중...'):
                     deficit += 1
             ############################################
 
-            ############세력탈출 판단###############
-            if (max_ror > 20 or (open - low)/open * 100 > 20) and volume > volume_inverted_hammer[ticker]:
-                flag_sell =  True
-                cash = purchase_cash * ( 1 + (close - purchase_price) / purchase_price )
-                acitivity = "escape"
-                if close > purchase_price:
-                    surplus += 1
-                else:
-                    deficit += 1
-            #######################################
-
             # ############장기간 보유로 인한 매매#############
             # if hold_progress > 30 and flag_activity == False:
             #     flag_sell =  True
@@ -259,7 +252,7 @@ for date in tqdm(dates, desc='backtesting 중...'):
             #         deficit += 1
             # ##############################################
 
-            if  high > purchase_price * (100 + target_profit) / 100 and flag_activity == False: #돌파
+            if  high > purchase_price * (100 + target_profit) / 100 and flag_activity == False and flag_sell == False: #돌파
                 flag_rise[ticker] = True
                 profits.append([int((high - purchase_price)/purchase_price * 100), int(dip[ticker]), volume/volume_inverted_hammer[ticker]])
             ###############익절###################
@@ -270,28 +263,18 @@ for date in tqdm(dates, desc='backtesting 중...'):
                 cash = cash * (100 + target_profit) / 100
                 index = list_dates.index(date)
                 surplus += 1
-                # if index < len(list_dates) - 1:
-                #     df_target_ticker = pyupbit.get_ohlcv(target_ticker, interval="minute1",count=1440 , to=str(list_dates[index+1]))
-                #     df_target_ticker.reset_index(inplace=True)
-                #     minutes = df_target_ticker['index'].unique()
-                #     for minute in tqdm(minutes, desc='판매 타이밍 탐색중...'):
-                #         df_minute = df_target_ticker[df_target_ticker['index'] == minute]
-                #         minute_open = df_minute['open'].values[0]
-                #         minute_high = df_minute['high'].values[0]
-                #         minute_low = df_minute['low'].values[0]
-                #         minute_close = df_minute['close'].values[0]
-                #         minute_volume = df_minute['volume'].values[0]
-                #         profit = (minute_close - purchase_price) / purchase_price * 100
-                #         if minute_high > purchase_price * (100 + target_profit) / 100:
-                #             volume_inverted_hammer[ticker] -= 10 * volume
-                #         if volume_inverted_hammer[ticker] < 0 or profit > 50:
-                #             cash = cash * ((minute_close - purchase_price) / purchase_price + 1)
-                #             flag_sell =  True
-                #             activity = 'surplus sell'
-                #             surplus += 1
-                #             profits.append(profit)
-                #             break
             ####################################
+
+            ############세력탈출 판단###############
+            if (open - low)/open * 100 > 20 and flag_sell == False:
+                flag_sell =  True
+                cash = purchase_cash * ( 1 + (close - purchase_price) / purchase_price )
+                activity = "escape"
+                if close > purchase_price:
+                    surplus += 1
+                else:
+                    deficit += 1
+            #######################################
 
             if flag_sell == True:
                 print(str(date_inverted_hammer[ticker]) + " ~ " + str(date))
@@ -300,6 +283,7 @@ for date in tqdm(dates, desc='backtesting 중...'):
                 flag_rise[ticker] = False
                 flag_dip[ticker] = False
                 flag_hold = False
+                hold_progresses.append(hold_progress)
                 hold_progress = 0
                 df_all.loc[(df_all['ticker'] == target_ticker) & (df_all['index'] == date), 'activity'] = activity
                 target_ticker = ''
@@ -336,7 +320,7 @@ for date in tqdm(dates, desc='backtesting 중...'):
             activity = 'buy'
             transaction_list.append(target_ticker)
             df_all.loc[(df_all['ticker'] == target_ticker) & (df_all['index'] == date), 'activity'] = activity
-            print("buy {} which has {} hammer for {}! at {}".format(target_ticker,inverted_hammer[target_ticker], price[target_ticker], date))
+            print("buy {} which has {} hammer, {} dip for {}! at {}".format(target_ticker,inverted_hammer[target_ticker], dip[target_ticker], price[target_ticker], date))
     else:
         candidates = [t for t,v in flag_buy.items() if v > 0]
         if len(candidates) > 0:
@@ -355,7 +339,9 @@ for date in tqdm(dates, desc='backtesting 중...'):
 #     df_transaction_icker = pd.concat([df_transaction_icker, df_all[df_all['ticker'] == ticker]])
 # df_transaction_icker.to_csv(file_directory, mode='w',index=False)
 
-print(surplus + deficit)
-print(surplus/(surplus + deficit) * 100)
+print("거래횟수: " + str(surplus + deficit))
+print("성공률: "+ str(round(surplus/(surplus + deficit) * 100, 2)) + "%")
+print(hold_progresses)
+print(sum(hold_progresses)/len(hold_progresses))
 print(cash)
-print(profits)
+#print(profits)
