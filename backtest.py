@@ -49,6 +49,9 @@ now_year = now[0:4]
 now_month = now[5:7]
 now_day = now[8:10]
 surplus = 0
+normal_surplus = 0
+max_surplus = 0
+max_return_rate = 0.0
 deficit = 0
 # 코인 종가 담을 deque 변수
 ma7 = {}
@@ -165,7 +168,7 @@ for date in tqdm(dates, desc='backtesting 중...'):
         if flag_inverted_hammer[ticker] == True and ticker != target_ticker:  
             ##############매수 판단###############         
             if flag_dip[ticker] == True:           
-                if high > mid_inverted_hammer[ticker] and low < mid_inverted_hammer[ticker] and progress[ticker] > 1 and max_ror < 30 and ror > 0: #and volume_ratio < 5
+                if close > mid_inverted_hammer[ticker] and low < mid_inverted_hammer[ticker] and progress[ticker] > 1 and max_ror < 30 and ror > 0: #and volume_ratio < 5
                     flag_buy[ticker] = 1
                     price[ticker] = mid_inverted_hammer[ticker]
                 elif high > high_inverted_hammer[ticker]:
@@ -254,7 +257,7 @@ for date in tqdm(dates, desc='backtesting 중...'):
 
             if  high > purchase_price * (100 + target_profit) / 100 and flag_activity == False and flag_sell == False: #돌파
                 flag_rise[ticker] = True
-                profits.append([int((high - purchase_price)/purchase_price * 100), int(dip[ticker]), volume/volume_inverted_hammer[ticker]])
+                profits.append([int((high - purchase_price)/purchase_price * 100), hold_progress])
             ###############익절###################
             if flag_rise[ticker] == True and progress[ticker] > 2 and flag_activity == False:
                 flag_rise[ticker] = False
@@ -263,10 +266,14 @@ for date in tqdm(dates, desc='backtesting 중...'):
                 cash = cash * (100 + target_profit) / 100
                 index = list_dates.index(date)
                 surplus += 1
+                if target_profit == max_target_profit:
+                    max_surplus += 1 
+                else:
+                    normal_surplus += 1
             ####################################
 
             ############세력탈출 판단###############
-            if (open - low)/open * 100 > 20 and flag_sell == False:
+            if ((open - low)/open * 100 > 20) and flag_sell == False:
                 flag_sell =  True
                 cash = purchase_cash * ( 1 + (close - purchase_price) / purchase_price )
                 activity = "escape"
@@ -275,6 +282,28 @@ for date in tqdm(dates, desc='backtesting 중...'):
                 else:
                     deficit += 1
             #######################################
+
+            ##########목표 수익률 잘못 설정###########
+            return_rate = (high - purchase_price)/purchase_price * 100
+            if max_return_rate < return_rate:
+                max_return_rate = return_rate
+            # elif max_return_rate > 30 and (close - purchase_price)/purchase_price * 100 > 20 and flag_sell == False:
+            #     flag_sell =  True
+            #     cash = purchase_cash * ( 1 + (close - purchase_price) / purchase_price )
+            #     activity = "miss"
+            #     if close > purchase_price:
+            #         surplus += 1
+            #     else:
+            #         deficit += 1
+            elif max_return_rate > 20 and (close - purchase_price)/purchase_price * 100 < 0 and flag_sell == False:
+                flag_sell =  True
+                cash = purchase_cash * ( 1 + (close - purchase_price) / purchase_price )
+                activity = "miss"
+                if close > purchase_price:
+                    surplus += 1
+                else:
+                    deficit += 1
+            #########################################
 
             if flag_sell == True:
                 print(str(date_inverted_hammer[ticker]) + " ~ " + str(date))
@@ -319,6 +348,7 @@ for date in tqdm(dates, desc='backtesting 중...'):
             purchase_cash = cash
             activity = 'buy'
             transaction_list.append(target_ticker)
+            max_return_rate = 0.0
             df_all.loc[(df_all['ticker'] == target_ticker) & (df_all['index'] == date), 'activity'] = activity
             print("buy {} which has {} hammer, {} dip for {}! at {}".format(target_ticker,inverted_hammer[target_ticker], dip[target_ticker], price[target_ticker], date))
     else:
@@ -341,7 +371,8 @@ for date in tqdm(dates, desc='backtesting 중...'):
 
 print("거래횟수: " + str(surplus + deficit))
 print("성공률: "+ str(round(surplus/(surplus + deficit) * 100, 2)) + "%")
+print(normal_surplus, max_surplus)
 print(hold_progresses)
 print(sum(hold_progresses)/len(hold_progresses))
 print(cash)
-#print(profits)
+print(profits)
