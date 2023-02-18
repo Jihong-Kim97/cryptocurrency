@@ -329,6 +329,14 @@ for date in tqdm(dates, desc='backtesting 중...'):
                     surplus += 1
                 else:
                     deficit += 1
+            # elif max_return_rate > 20 and (close - purchase_price)/purchase_price * 100 < 0 and flag_sell == False:
+            #     flag_sell =  True
+            #     cash = purchase_cash * ( 1 + (close - purchase_price) / purchase_price )
+            #     activity = "miss"
+            #     if close > purchase_price:
+            #         surplus += 1
+            #     else:
+            #         deficit += 1
             #########################################
 
             if flag_sell == True:
