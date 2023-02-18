@@ -6,13 +6,14 @@ import datetime
 import os
 import csv
 from collections import deque
+from utils import yesterday
 
 cash = 1000000 #자산
 purchase_cash = 1000000 #매입가
 tickers = pyupbit.get_tickers(fiat="KRW")
 allowable_loss = 10.0 #허용 손실
 target_profit = 20.0 #목표 수익
-max_target_profit = 40.0
+max_target_profit = 50.0
 flag_standard = 1 # 1:거래량기준 0: 손실률기준
 box_loss = 15.00
 box_high = 20.00
@@ -42,6 +43,7 @@ flag_escape =  False
 flag_sell =  False
 flag_hold = False
 flag_activity = False
+flag_under_ma224 = False
 target_ticker = ''
 purchase_price = 0
 transaction_dates = []
@@ -58,15 +60,18 @@ deficit = 0
 # 코인 종가 담을 deque 변수
 ma7 = {}
 curr_ma7 = 0
+ma224 = {}
+curr_ma224 = {}
 transaction_list = []
 count = 1000
 profits = []
 high_profits = []
 
-#############초기 세팅############## 당일 오전 9시가 넘었고 당일 파일 없으면 파일 생성
-if now_hour < 9:
-    file_directory = "C:/Users/KimJihong/Desktop/김지홍/개발/코인/DB/{}{}{}_yesterday.csv".format(now_year,now_month,now_day)
+#############초기 세팅##############
+if now_hour > 9:
+    file_directory = "C:/Users/KimJihong/Desktop/김지홍/개발/코인/DB/{}{}{}.csv".format(now_year,now_month,now_day)
 else:
+    now_year, now_month, now_day = yesterday(now)
     file_directory = "C:/Users/KimJihong/Desktop/김지홍/개발/코인/DB/{}{}{}.csv".format(now_year,now_month,now_day)
 if not os.path.exists(file_directory):
     for ticker in tqdm(tickers, desc='자료 병합중...'):
@@ -88,6 +93,8 @@ if not os.path.exists(file_directory):
         high_inverted_hammer[ticker] = 0
         dip[ticker] = 0
         ma7[ticker] = deque(maxlen=20)
+        ma224[ticker] = deque(maxlen=224)
+        curr_ma224[ticker] = 0
     df_all.reset_index(inplace=True)
     df_all = df_all.sort_values(by='index')
     df_all.to_csv(file_directory, mode='w',index=False)
@@ -108,6 +115,8 @@ else:
         low_inverted_hammer[ticker] = 0
         dip[ticker] = 0
         ma7[ticker] = deque(maxlen=7)
+        ma224[ticker] = deque(maxlen=224)
+        curr_ma224[ticker] = 0
 ###################################
 
 df_all = pd.read_csv(file_directory)
@@ -152,6 +161,8 @@ for date in tqdm(dates, desc='backtesting 중...'):
             tail_low_body_ratio = 0
         volume_ratio = volume / pre_volumes[ticker]
         pre_volumes[ticker] = volume
+        ma224[ticker].append(close)
+        curr_ma224[ticker] = sum(ma224[ticker]) / len(ma224[ticker])   
         ################################
 
         #############매집봉 탐색(기준: 거래량, 윗꼬리)###############
@@ -228,8 +239,9 @@ for date in tqdm(dates, desc='backtesting 중...'):
         if target_ticker == ticker and flag_hold and trading_day > 10:
             if dip[ticker] > 20:
                 target_profit = max_target_profit
-            # elif hold_progress > 30:
+            # elif close > curr_ma224[ticker] * 1.1 and  len(ma224[ticker]) == 224 and flag_under_ma224:
             #     target_profit = max_target_profit
+            #     print(date, ticker, curr_ma224[ticker])
             else: 
                 target_profit = 20
             ######손절(기준: 허용 손실, 거래량)#########
@@ -295,21 +307,21 @@ for date in tqdm(dates, desc='backtesting 중...'):
                         normal_surplus += 1
                 else:
                     deficit += 1
-            #######################################
+            ####################################### miss 30->40
 
             ##########목표 수익률 잘못 설정###########
             return_rate = (high - purchase_price)/purchase_price * 100
             if max_return_rate < return_rate:
                 max_return_rate = return_rate
-            # elif max_return_rate > 30 and (close - purchase_price)/purchase_price * 100 > 20 and flag_sell == False:
-            #     flag_sell =  True
-            #     cash = purchase_cash * ( 1 + (close - purchase_price) / purchase_price )
-            #     activity = "miss"
-            #     if close > purchase_price:
-            #         surplus += 1
-            #     else:
-            #         deficit += 1
-            elif max_return_rate > 20 and (close - purchase_price)/purchase_price * 100 < 0 and flag_sell == False:
+            elif max_return_rate > 40 and (close - purchase_price)/purchase_price * 100 < 30 and flag_sell == False:
+                flag_sell =  True
+                cash = purchase_cash * ( 1 + (close - purchase_price) / purchase_price )
+                activity = "miss"
+                if close > purchase_price:
+                    surplus += 1
+                else:
+                    deficit += 1
+            elif max_return_rate > 30 and (close - purchase_price)/purchase_price * 100 < 20 and flag_sell == False:
                 flag_sell =  True
                 cash = purchase_cash * ( 1 + (close - purchase_price) / purchase_price )
                 activity = "miss"
@@ -362,6 +374,10 @@ for date in tqdm(dates, desc='backtesting 중...'):
             activity = 'buy'
             transaction_list.append(target_ticker)
             max_return_rate = 0.0
+            if price[target_ticker] < curr_ma224[target_ticker] and  len(ma224[target_ticker]) == 224:
+                flag_under_ma224 = True
+            else:
+                flag_under_ma224 = False
             df_all.loc[(df_all['ticker'] == target_ticker) & (df_all['index'] == date), 'activity'] = activity
             print("buy {} which has {} hammer, {} dip for {}! at {}".format(target_ticker,inverted_hammer[target_ticker], dip[target_ticker], price[target_ticker], date))
     else:
@@ -375,12 +391,6 @@ for date in tqdm(dates, desc='backtesting 중...'):
 
     data = [date, cash, target_ticker, activity, candidates]
     writer.writerow(data)
-
-# file_directory = "C:/Users/KimJihong/Desktop/김지홍/개발/코인/DB/{}{}{}_transaction_ticker_{}_{}.csv".format(now_year,now_month,now_day,allowable_loss,target_profit)
-# df_transaction_icker = pd.DataFrame()
-# for ticker in tqdm(transaction_list, desc='거래 티커 병합중'):
-#     df_transaction_icker = pd.concat([df_transaction_icker, df_all[df_all['ticker'] == ticker]])
-# df_transaction_icker.to_csv(file_directory, mode='w',index=False)
 
 print("거래횟수: " + str(surplus + deficit))
 print("성공률: "+ str(round(surplus/(surplus + deficit) * 100, 2)) + "%")

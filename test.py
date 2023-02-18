@@ -1,5 +1,7 @@
 import pyupbit
 import numpy as np
+from utils import yesterday
+import datetime
 
-
-print((pyupbit.get_ohlcv("KRW-BTC", interval="minute1",count=1440 , to="20230210 09:00:00")).tolist())
+now = str(datetime.datetime.now())
+print(yesterday(now))
