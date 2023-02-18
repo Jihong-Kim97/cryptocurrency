@@ -49,6 +49,7 @@ now = str(datetime.datetime.now())
 now_year = now[0:4]
 now_month = now[5:7]
 now_day = now[8:10]
+now_hour = int(now[11:13])
 surplus = 0
 normal_surplus = 0
 max_surplus = 0
@@ -62,8 +63,11 @@ count = 1000
 profits = []
 high_profits = []
 
-#############초기 세팅##############
-file_directory = "C:/Users/KimJihong/Desktop/김지홍/개발/코인/DB/{}{}{}_{}.csv".format(now_year,now_month,now_day,count)
+#############초기 세팅############## 당일 오전 9시가 넘었고 당일 파일 없으면 파일 생성
+if now_hour < 9:
+    file_directory = "C:/Users/KimJihong/Desktop/김지홍/개발/코인/DB/{}{}{}_yesterday.csv".format(now_year,now_month,now_day)
+else:
+    file_directory = "C:/Users/KimJihong/Desktop/김지홍/개발/코인/DB/{}{}{}.csv".format(now_year,now_month,now_day)
 if not os.path.exists(file_directory):
     for ticker in tqdm(tickers, desc='자료 병합중...'):
         df_ticker = pyupbit.get_ohlcv(ticker, count = count)
@@ -88,7 +92,6 @@ if not os.path.exists(file_directory):
     df_all = df_all.sort_values(by='index')
     df_all.to_csv(file_directory, mode='w',index=False)
 else:
-    df_all = pd.read_csv(file_directory)
     for ticker in tqdm(tickers, desc='자료 병합중...'):
         flag_inverted_hammer[ticker] = False
         flag_dip[ticker] = False
@@ -107,6 +110,7 @@ else:
         ma7[ticker] = deque(maxlen=7)
 ###################################
 
+df_all = pd.read_csv(file_directory)
 file_directory = "C:/Users/KimJihong/Desktop/김지홍/개발/코인/DB/{}{}{}_transaction_{}_{}.csv".format(now_year,now_month,now_day,allowable_loss,target_profit)
 f = open(file_directory, "w", encoding="utf-8-sig", newline="")
 writer = csv.writer(f)
@@ -115,12 +119,10 @@ writer.writerow(row_title)
 df_all['activity'] = ''
 
 dates = df_all['index'].unique()
-list_dates = dates.tolist()
 for date in tqdm(dates, desc='backtesting 중...'):
     df_single_day = df_all[df_all['index'] == date]
     flag_activity = False
     activity = ''
-    accumulation_tickers = []
     trading_day += 1
     if flag_hold:
         hold_progress += 1
@@ -163,9 +165,6 @@ for date in tqdm(dates, desc='backtesting 중...'):
             high_inverted_hammer[ticker] = high
             accumulate_volume_inverted_hammer[ticker] += volume
             volume_inverted_hammer[ticker] += volume
-            if(ticker =='KRW-POWR'):
-                print(date)
-                print(mid_inverted_hammer[ticker])
             inverted_hammer[ticker] += 1
         ######################################           
 
@@ -259,6 +258,10 @@ for date in tqdm(dates, desc='backtesting 중...'):
             #     activity = 'long time passed sell'
             #     if close > purchase_price:
             #         surplus += 1
+            #         if target_profit == max_target_profit:
+            #             max_surplus += 1 
+            #         else:
+            #             normal_surplus += 1
             #     else:
             #         deficit += 1
             # ##############################################
@@ -272,7 +275,6 @@ for date in tqdm(dates, desc='backtesting 중...'):
                 flag_sell =  True
                 activity = 'surplus sell'
                 cash = cash * (100 + target_profit) / 100
-                index = list_dates.index(date)
                 surplus += 1
                 if target_profit == max_target_profit:
                     max_surplus += 1 
@@ -287,6 +289,10 @@ for date in tqdm(dates, desc='backtesting 중...'):
                 activity = "escape"
                 if close > purchase_price:
                     surplus += 1
+                    if target_profit == max_target_profit:
+                        max_surplus += 1 
+                    else:
+                        normal_surplus += 1
                 else:
                     deficit += 1
             #######################################
@@ -336,8 +342,6 @@ for date in tqdm(dates, desc='backtesting 중...'):
 
         ma7[ticker].append(close)
         curr_ma7 = sum(ma7[ticker]) / len(ma7[ticker])   
-        if flag_inverted_hammer[ticker] and flag_dip[ticker]:
-            accumulation_tickers.append(ticker)
 
     
     if flag_hold == False:
@@ -384,4 +388,4 @@ print(normal_surplus, max_surplus)
 print(hold_progresses)
 print(sum(hold_progresses)/len(hold_progresses))
 print(cash)
-print(profits)
+# print(profits)
