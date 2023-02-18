@@ -54,6 +54,7 @@ now_day = now[8:10]
 now_hour = int(now[11:13])
 surplus = 0
 normal_surplus = 0
+less_surplus = 0
 max_surplus = 0
 max_return_rate = 0.0
 deficit = 0
@@ -190,7 +191,7 @@ for date in tqdm(dates, desc='backtesting 중...'):
             if ticker != target_ticker:
                 ##############매수 판단###############         
                 if flag_dip[ticker] == True:           
-                    if close > mid_inverted_hammer[ticker] and low < mid_inverted_hammer[ticker] and progress[ticker] > 1 and max_ror < 30 and ror > 0: #and volume_ratio < 5
+                    if close > mid_inverted_hammer[ticker] and low < mid_inverted_hammer[ticker] and progress[ticker] > 1 and max_ror < 30 and ror > 0:
                         flag_buy[ticker] = 1
                         price[ticker] = mid_inverted_hammer[ticker]
                     elif high > high_inverted_hammer[ticker]:
@@ -237,13 +238,7 @@ for date in tqdm(dates, desc='backtesting 중...'):
 
         ###########코인 보유시##########
         if target_ticker == ticker and flag_hold and trading_day > 10:
-            if dip[ticker] > 20:
-                target_profit = max_target_profit
-            # elif close > curr_ma224[ticker] * 1.1 and  len(ma224[ticker]) == 224 and flag_under_ma224:
-            #     target_profit = max_target_profit
-            #     print(date, ticker, curr_ma224[ticker])
-            else: 
-                target_profit = 20
+
             ######손절(기준: 허용 손실, 거래량)#########
             if close < purchase_price * (100 - allowable_loss) / 100 and flag_sell == False:
                 if flag_standard:
@@ -290,8 +285,10 @@ for date in tqdm(dates, desc='backtesting 중...'):
                 surplus += 1
                 if target_profit == max_target_profit:
                     max_surplus += 1 
-                else:
+                elif target_profit == 20:
                     normal_surplus += 1
+                else:
+                    less_surplus += 1
             ####################################
 
             ############세력탈출 판단###############
@@ -303,11 +300,30 @@ for date in tqdm(dates, desc='backtesting 중...'):
                     surplus += 1
                     if target_profit == max_target_profit:
                         max_surplus += 1 
-                    else:
+                    elif target_profit == 20:
                         normal_surplus += 1
+                    else:
+                        less_surplus += 1
                 else:
                     deficit += 1
-            ####################################### miss 30->40
+            #######################################
+
+            ###############224일선###################
+            if flag_under_ma224 == False and close < curr_ma224[ticker] and len(ma224[ticker]) == 224:
+                flag_sell =  True
+                cash = purchase_cash * ( 1 + (close - purchase_price) / purchase_price )
+                activity = "ma224 under"
+                if close > purchase_price:
+                    surplus += 1
+                    if target_profit == max_target_profit:
+                        max_surplus += 1 
+                    elif target_profit == 20:
+                        normal_surplus += 1
+                    else:
+                        less_surplus += 1
+                else:
+                    deficit += 1
+            ########################################
 
             ##########목표 수익률 잘못 설정###########
             return_rate = (high - purchase_price)/purchase_price * 100
@@ -319,6 +335,7 @@ for date in tqdm(dates, desc='backtesting 중...'):
                 activity = "miss"
                 if close > purchase_price:
                     surplus += 1
+                    less_surplus += 1
                 else:
                     deficit += 1
             elif max_return_rate > 30 and (close - purchase_price)/purchase_price * 100 < 20 and flag_sell == False:
@@ -327,6 +344,7 @@ for date in tqdm(dates, desc='backtesting 중...'):
                 activity = "miss"
                 if close > purchase_price:
                     surplus += 1
+                    less_surplus += 1
                 else:
                     deficit += 1
             # elif max_return_rate > 20 and (close - purchase_price)/purchase_price * 100 < 0 and flag_sell == False:
@@ -387,6 +405,10 @@ for date in tqdm(dates, desc='backtesting 중...'):
             else:
                 flag_under_ma224 = False
             df_all.loc[(df_all['ticker'] == target_ticker) & (df_all['index'] == date), 'activity'] = activity
+            if dip[target_ticker] > 20:
+                target_profit = max_target_profit
+            else: 
+                target_profit = 20
             print("buy {} which has {} hammer, {} dip for {}! at {}".format(target_ticker,inverted_hammer[target_ticker], dip[target_ticker], price[target_ticker], date))
     else:
         candidates = [t for t,v in flag_buy.items() if v > 0]
@@ -402,7 +424,7 @@ for date in tqdm(dates, desc='backtesting 중...'):
 
 print("거래횟수: " + str(surplus + deficit))
 print("성공률: "+ str(round(surplus/(surplus + deficit) * 100, 2)) + "%")
-print(normal_surplus, max_surplus)
+print(normal_surplus, max_surplus, less_surplus)
 print(hold_progresses)
 print(sum(hold_progresses)/len(hold_progresses))
 print(cash)
