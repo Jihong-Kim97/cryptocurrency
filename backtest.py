@@ -154,6 +154,7 @@ for date in tqdm(dates, desc='backtesting 중...'):
         body = close - open
         ror = (close - open)/open * 100
         max_ror = (high - open)/open * 100
+        flag_buy[ticker] = False
         if not body == 0:
             tail_high_body_ratio = tail_high/body
             tail_low_body_ratio = tail_low/body
