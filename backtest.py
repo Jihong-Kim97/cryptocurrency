@@ -61,9 +61,12 @@ deficit = 0
 # 코인 종가 담을 deque 변수
 ma7 = {}
 curr_ma7 = 0
+ma112 = {}
+curr_ma112 = {}
 ma224 = {}
 curr_ma224 = {}
-transaction_list = []
+ma448 = {}
+curr_ma448 = {}
 count = 1000
 profits = []
 high_profits = []
@@ -94,8 +97,12 @@ if not os.path.exists(file_directory):
         high_inverted_hammer[ticker] = 0
         dip[ticker] = 0
         ma7[ticker] = deque(maxlen=20)
+        ma112[ticker] = deque(maxlen=112)
+        curr_ma112[ticker] = 0
         ma224[ticker] = deque(maxlen=224)
         curr_ma224[ticker] = 0
+        ma448[ticker] = deque(maxlen=448)
+        curr_ma448[ticker] = 0
     df_all.reset_index(inplace=True)
     df_all = df_all.sort_values(by='index')
     df_all.to_csv(file_directory, mode='w',index=False)
@@ -116,8 +123,12 @@ else:
         low_inverted_hammer[ticker] = 0
         dip[ticker] = 0
         ma7[ticker] = deque(maxlen=7)
+        ma112[ticker] = deque(maxlen=112)
+        curr_ma112[ticker] = 0
         ma224[ticker] = deque(maxlen=224)
         curr_ma224[ticker] = 0
+        ma448[ticker] = deque(maxlen=448)
+        curr_ma448[ticker] = 0
 ###################################
 
 df_all = pd.read_csv(file_directory)
@@ -163,12 +174,17 @@ for date in tqdm(dates, desc='backtesting 중...'):
             tail_low_body_ratio = 0
         volume_ratio = volume / pre_volumes[ticker]
         pre_volumes[ticker] = volume
+        ########이동평균선 계산###########
+        ma112[ticker].append(close)
+        curr_ma112[ticker] = sum(ma112[ticker]) / len(ma112[ticker])   
         ma224[ticker].append(close)
         curr_ma224[ticker] = sum(ma224[ticker]) / len(ma224[ticker])   
+        ma448[ticker].append(close)
+        curr_ma448[ticker] = sum(ma448[ticker]) / len(ma448[ticker])   
         ################################
 
         #############매집봉 탐색(기준: 거래량, 윗꼬리)###############
-        if tail_low_body_ratio < tail_body_standard_ratio and tail_high_body_ratio > tail_body_standard_ratio and volume_ratio > standard_volume_ratio:  # low == open
+        if tail_low_body_ratio < tail_body_standard_ratio and tail_high_body_ratio > tail_body_standard_ratio and volume_ratio > standard_volume_ratio :  # low == open
             if not flag_inverted_hammer[ticker]: 
                 flag_inverted_hammer[ticker] = True
                 date_inverted_hammer[ticker] = date    
@@ -179,6 +195,8 @@ for date in tqdm(dates, desc='backtesting 중...'):
             accumulate_volume_inverted_hammer[ticker] += volume
             volume_inverted_hammer[ticker] += volume
             inverted_hammer[ticker] += 1
+            if ticker == 'KRW-STX':
+                print(date, volume_inverted_hammer[ticker])
         ######################################           
 
         ########매집봉 있는 코인#########
@@ -241,7 +259,7 @@ for date in tqdm(dates, desc='backtesting 중...'):
         if target_ticker == ticker and flag_hold and trading_day > 10:
 
             ######손절(기준: 허용 손실, 거래량)#########
-            if close < purchase_price * (100 - allowable_loss) / 100 and flag_sell == False:
+            if close < purchase_price * (100 - allowable_loss) / 100 and flag_sell == False and (high < curr_ma112[ticker] or len(ma112[ticker]) < 112 ):
                 if flag_standard:
                     if close < purchase_price * (100 - allowable_loss * 2) / 100:
                         volume_inverted_hammer[ticker] -= volume * 2
@@ -292,22 +310,22 @@ for date in tqdm(dates, desc='backtesting 중...'):
                     less_surplus += 1
             ####################################
 
-            ############세력탈출 판단###############
-            if ((open - low)/open * 100 > 20) and flag_sell == False:
-                flag_sell =  True
-                cash = purchase_cash * ( 1 + (close - purchase_price) / purchase_price )
-                activity = "escape"
-                if close > purchase_price:
-                    surplus += 1
-                    if target_profit == max_target_profit:
-                        max_surplus += 1 
-                    elif target_profit == 20:
-                        normal_surplus += 1
-                    else:
-                        less_surplus += 1
-                else:
-                    deficit += 1
-            #######################################
+            # ############세력실패 판단###############
+            # if ((open - low)/open * 100 > 20) and flag_sell == False:
+            #     flag_sell =  True
+            #     cash = purchase_cash * ( 1 + (close - purchase_price) / purchase_price )
+            #     activity = "escape"
+            #     if close > purchase_price:
+            #         surplus += 1
+            #         if target_profit == max_target_profit:
+            #             max_surplus += 1 
+            #         elif target_profit == 20:
+            #             normal_surplus += 1
+            #         else:
+            #             less_surplus += 1
+            #     else:
+            #         deficit += 1
+            # #######################################
 
             ###############224일선###################
             if flag_under_ma224 == False and close < curr_ma224[ticker] and len(ma224[ticker]) == 224:
@@ -399,7 +417,6 @@ for date in tqdm(dates, desc='backtesting 중...'):
             flag_hold = True
             purchase_cash = cash
             activity = 'buy'
-            transaction_list.append(target_ticker)
             max_return_rate = 0.0
             if price[target_ticker] < curr_ma224[target_ticker] and  len(ma224[target_ticker]) == 224:
                 flag_under_ma224 = True
