@@ -15,6 +15,7 @@ allowable_loss = 10.0 #허용 손실
 target_profit = 20.0 #목표 수익
 max_target_profit = 50.0
 flag_standard = 1 # 1:거래량기준 0: 손실률기준
+rise_thresold = 10
 box_loss = 15.00
 box_high = 20.00
 tail_body_standard_ratio = 0.25
@@ -28,6 +29,7 @@ flag_dip = {}
 flag_rise = {}
 flag_buy = {} #중간값 들어온 횟수
 progress = {} #매집봉 발견 이후 경과일
+rise_progress = {} #큰 상승 이후 경과일
 hold_progress = 0
 hold_progresses = []
 date_inverted_hammer = {}
@@ -77,59 +79,37 @@ if now_hour > 9:
 else:
     now_year, now_month, now_day = yesterday(now)
     file_directory = "C:/Users/KimJihong/Desktop/김지홍/개발/코인/DB/{}{}{}.csv".format(now_year,now_month,now_day)
-if not os.path.exists(file_directory):
-    for ticker in tqdm(tickers, desc='자료 병합중...'):
+for ticker in tqdm(tickers, desc='자료 병합중...'):
+    if not os.path.exists(file_directory):
         df_ticker = pyupbit.get_ohlcv(ticker, count = count)
         df_ticker['ticker'] = ticker
-        flag_inverted_hammer[ticker] = False
-        flag_dip[ticker] = False
-        flag_rise[ticker] = False
-        flag_buy[ticker] = 0
-        progress[ticker] = 0
-        inverted_hammer[ticker] = 0
-        volume_inverted_hammer[ticker] = 0
-        accumulate_volume_inverted_hammer[ticker] = 0
         df_all = pd.concat([df_all, df_ticker])
-        pre_volumes[ticker] = 1000000000
-        mid_inverted_hammer[ticker] = 0
-        price[ticker] = 0
-        low_inverted_hammer[ticker] = 0
-        high_inverted_hammer[ticker] = 0
-        dip[ticker] = 0
-        ma7[ticker] = deque(maxlen=20)
-        ma112[ticker] = deque(maxlen=112)
-        curr_ma112[ticker] = 0
-        ma224[ticker] = deque(maxlen=224)
-        curr_ma224[ticker] = 0
-        ma448[ticker] = deque(maxlen=448)
-        curr_ma448[ticker] = 0
+    flag_inverted_hammer[ticker] = False
+    flag_dip[ticker] = False
+    flag_rise[ticker] = False
+    flag_buy[ticker] = 0
+    progress[ticker] = 0
+    inverted_hammer[ticker] = 0
+    volume_inverted_hammer[ticker] = 0
+    accumulate_volume_inverted_hammer[ticker] = 0
+    pre_volumes[ticker] = 1000000000
+    mid_inverted_hammer[ticker] = 0
+    price[ticker] = 0
+    low_inverted_hammer[ticker] = 0
+    high_inverted_hammer[ticker] = 0
+    dip[ticker] = 0
+    ma7[ticker] = deque(maxlen=20)
+    ma112[ticker] = deque(maxlen=112)
+    curr_ma112[ticker] = 0
+    ma224[ticker] = deque(maxlen=224)
+    curr_ma224[ticker] = 0
+    ma448[ticker] = deque(maxlen=448)
+    curr_ma448[ticker] = 0
+    rise_progress[ticker] = 1000
+if not os.path.exists(file_directory):
     df_all.reset_index(inplace=True)
     df_all = df_all.sort_values(by='index')
     df_all.to_csv(file_directory, mode='w',index=False)
-else:
-    for ticker in tqdm(tickers, desc='자료 병합중...'):
-        flag_inverted_hammer[ticker] = False
-        flag_dip[ticker] = False
-        flag_rise[ticker] = False
-        flag_buy[ticker] = 0
-        inverted_hammer[ticker] = 0
-        progress[ticker] = 0
-        pre_volumes[ticker] = 1000000000
-        volume_inverted_hammer[ticker] = 0
-        accumulate_volume_inverted_hammer[ticker] = 0
-        mid_inverted_hammer[ticker] = 0
-        high_inverted_hammer[ticker] = 0
-        price[ticker] = 0
-        low_inverted_hammer[ticker] = 0
-        dip[ticker] = 0
-        ma7[ticker] = deque(maxlen=7)
-        ma112[ticker] = deque(maxlen=112)
-        curr_ma112[ticker] = 0
-        ma224[ticker] = deque(maxlen=224)
-        curr_ma224[ticker] = 0
-        ma448[ticker] = deque(maxlen=448)
-        curr_ma448[ticker] = 0
-###################################
 
 df_all = pd.read_csv(file_directory)
 file_directory = "C:/Users/KimJihong/Desktop/김지홍/개발/코인/DB/{}{}{}_transaction_{}_{}.csv".format(now_year,now_month,now_day,allowable_loss,target_profit)
@@ -175,6 +155,8 @@ for date in tqdm(dates, desc='backtesting 중...'):
         volume_ratio = volume / pre_volumes[ticker]
         pre_volumes[ticker] = volume
         ########이동평균선 계산###########
+        ma7[ticker].append(close)
+        curr_ma7 = sum(ma7[ticker]) / len(ma7[ticker])   
         ma112[ticker].append(close)
         curr_ma112[ticker] = sum(ma112[ticker]) / len(ma112[ticker])   
         ma224[ticker].append(close)
@@ -182,9 +164,12 @@ for date in tqdm(dates, desc='backtesting 중...'):
         ma448[ticker].append(close)
         curr_ma448[ticker] = sum(ma448[ticker]) / len(ma448[ticker])   
         ################################
+        rise_progress[ticker] += 1
+        if max_ror > 50:
+            rise_progress[ticker] = 0
 
         #############매집봉 탐색(기준: 거래량, 윗꼬리)###############
-        if tail_low_body_ratio < tail_body_standard_ratio and tail_high_body_ratio > tail_body_standard_ratio and volume_ratio > standard_volume_ratio :  # low == open
+        if tail_low_body_ratio < tail_body_standard_ratio and tail_high_body_ratio > tail_body_standard_ratio and volume_ratio > standard_volume_ratio:  # low == open
             if not flag_inverted_hammer[ticker]: 
                 flag_inverted_hammer[ticker] = True
                 date_inverted_hammer[ticker] = date    
@@ -396,10 +381,6 @@ for date in tqdm(dates, desc='backtesting 중...'):
                 inverted_hammer[ticker] = 0
                 dip[ticker] = 0
                 flag_activity = True
-
-        ma7[ticker].append(close)
-        curr_ma7 = sum(ma7[ticker]) / len(ma7[ticker])   
-
     
     if flag_hold == False:
         candidates = [t for t,v in flag_buy.items() if v > 0]
